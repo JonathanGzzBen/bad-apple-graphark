@@ -1,0 +1,9 @@
+{
+  "name" : "bad-apple-graphark",
+  "version-string" : "1.0.0",
+  "builtin-baseline" : "031ad89ce6c575df35a8e58707ad2c898446c63e",
+  "dependencies" : [ {
+    "name" : "opencv",
+    "version>=" : "4.11.0"
+  } ]
+}

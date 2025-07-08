@@ -1,0 +1,5 @@
+cmake-build-*/
+.idea/
+bad_apple.mp4
+serialized_bad_apple.bin
+test_bad_apple_frame.jpg
