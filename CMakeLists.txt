@@ -1,3 +1,5 @@
 cmake_minimum_required(VERSION 3.31)
 project(bad_apple_graphark)
+
 add_subdirectory(bad_apple_serializer)
+add_subdirectory(bad_apple_player)
