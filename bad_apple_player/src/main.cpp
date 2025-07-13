@@ -39,9 +39,9 @@ auto read_coordinates() -> std::generator<std::tuple<float, float>> {
     file.read(reinterpret_cast<char*>(&b), sizeof(uint32_t));
     return b;
   };
-  uint32_t width = read_uint32(coordinates_file);
-  uint32_t height = read_uint32(coordinates_file);
-  uint32_t frame_count = read_uint32(coordinates_file);
+  uint32_t width = read_uint32(coordinates_file);        // 480
+  uint32_t height = read_uint32(coordinates_file);       // 360
+  uint32_t frame_count = read_uint32(coordinates_file);  // 100
 
   const auto read_uint8 = [](std::ifstream& file) {
     uint8_t b;
@@ -51,22 +51,18 @@ auto read_coordinates() -> std::generator<std::tuple<float, float>> {
 
   uint32_t current_width_pixel = 0;
   uint32_t current_height_pixel = 0;
-  while (!coordinates_file.eof()) {
-    auto byte = read_uint8(coordinates_file);
-    size_t current_bit = 0;
-    while (current_bit < 8) {
-      if (const bool value = byte >> (8 - current_bit) | 0b1) {
-        co_yield {current_width_pixel, current_height_pixel};
-      }
-      current_bit++;
-
-      if (current_width_pixel == width) {
-        current_height_pixel++;
+  uint8_t byte;
+  while (coordinates_file.read(reinterpret_cast<char*>(&byte), 1)) {
+    for (int current_bit = 0; current_bit < 8; current_bit++) {
+      const bool is_black = byte >> (7 - current_bit) & 0b1;
+      if (is_black) {
+        // Flip y
+        co_yield {current_width_pixel, height - current_height_pixel};
       }
       current_width_pixel++;
       if (width <= current_width_pixel) {
-        current_height_pixel++;
         current_width_pixel = 0;
+        current_height_pixel++;
       }
     }
   }
@@ -89,7 +85,8 @@ auto main() -> int {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
 
   const auto window =
-      glfwCreateWindow(500, 500, "Bad Apple Graphark", nullptr, nullptr);
+      // glfwCreateWindow(500, 500, "Bad Apple Graphark", nullptr, nullptr);
+      glfwCreateWindow(480, 480, "Bad Apple Graphark", nullptr, nullptr);
   if (window == nullptr) {
     std::cerr << "Failed to create GLFW window." << std::endl;
     glfwTerminate();
@@ -127,13 +124,18 @@ auto main() -> int {
     return 1;
   }
 
-  // for (const auto& [x, y] : read_coordinates()) {
-  //   std::cout << "X: " << x << " Y: " << y << std::endl;
-  // }
+  std::vector<float> vertices;
+  vertices.reserve(480 * 480);
+  for (const auto& [x, y] : read_coordinates()) {
+    vertices.emplace_back(x);
+    vertices.emplace_back(y);
+  }
 
   glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_TRUE);
 
-  auto cam = Camera(-10, 10, -10, 10);
+  // auto cam = Camera(-10, 10, -10, 10);
+  // auto cam = Camera(0, 480, 0, 360);
+  auto cam = Camera(0, 480, 0, 480);
   const auto handle_input = [&window, &cam](float delta_time) {
     const auto is_pressed = [&window](int key) {
       return glfwGetKey(window, key) == GLFW_PRESS;
@@ -167,10 +169,14 @@ auto main() -> int {
   while (!glfwWindowShouldClose(window)) {
     const auto delta = get_delta();
     const auto m_projection =
-        glm::ortho(cam.minX(), cam.maxX(), cam.minY(), cam.maxY(), -1.0f, 1.0f);
+        // glm::ortho(0.0F, 480.0F, 0.0F, 360.0F, 1.0F, 0.0F);
+    glm::ortho(cam.minX(), cam.maxX(), cam.minY(), cam.maxY(), -1.0f, 1.0f);
     const auto grid = graphark::elements::get_grid_drawable(cam);
     const graphark::Drawable2D axis =
         graphark::elements::get_axis_drawable(cam);
+
+    const graphark::Drawable2D bad_apple_frame =
+        graphark::Drawable2D(vertices, GL_POINTS);
 
     handle_input(delta);
 
@@ -187,6 +193,10 @@ auto main() -> int {
     program->SetUniformVector("vColor", glm::vec4(1.0, 1.0, 1.0, 1.0))
         .or_else(print_err_and_abort_execution<void>);
     axis.Draw();
+
+    program->SetUniformVector("vColor", glm::vec4(1.0, 0.5, 0.5, 1.0))
+        .or_else(print_err_and_abort_execution<void>);
+    bad_apple_frame.Draw();
 
     glfwSwapBuffers(window);
     glfwPollEvents();
