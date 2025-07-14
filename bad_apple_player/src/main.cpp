@@ -26,8 +26,7 @@ auto get_delta() -> double {
   return deltaTime;
 }
 
-// Generate
-auto read_coordinates() -> std::generator<std::tuple<float, float>> {
+auto read_frames() -> std::generator<std::vector<float>> {
   std::ifstream coordinates_file("serialized_bad_apple.bin", std::ios::binary);
   if (!coordinates_file.is_open()) {
     std::cerr << "Could not open bin file\n";
@@ -39,30 +38,34 @@ auto read_coordinates() -> std::generator<std::tuple<float, float>> {
     file.read(reinterpret_cast<char*>(&b), sizeof(uint32_t));
     return b;
   };
-  uint32_t width = read_uint32(coordinates_file);        // 480
-  uint32_t height = read_uint32(coordinates_file);       // 360
-  uint32_t frame_count = read_uint32(coordinates_file);  // 100
-
-  const auto read_uint8 = [](std::ifstream& file) {
-    uint8_t b;
-    file.read(reinterpret_cast<char*>(&b), sizeof(uint8_t));
-    return b;
-  };
+  uint32_t width = read_uint32(coordinates_file);   // 480
+  uint32_t height = read_uint32(coordinates_file);  // 360
+  uint32_t frame_count =
+      read_uint32(coordinates_file);  // Unused but required for alignment
 
   uint32_t current_width_pixel = 0;
   uint32_t current_height_pixel = 0;
   uint8_t byte;
+
+  std::vector<float> coords;
   while (coordinates_file.read(reinterpret_cast<char*>(&byte), 1)) {
     for (int current_bit = 0; current_bit < 8; current_bit++) {
       const bool is_black = byte >> (7 - current_bit) & 0b1;
       if (is_black) {
+        coords.emplace_back(current_width_pixel);
         // Flip y
-        co_yield {current_width_pixel, height - current_height_pixel};
+        coords.emplace_back(height - current_height_pixel);
       }
       current_width_pixel++;
       if (width <= current_width_pixel) {
         current_width_pixel = 0;
         current_height_pixel++;
+      }
+      if (current_height_pixel == height) {
+        // Complete frame
+        co_yield coords;
+        coords.clear();
+        current_height_pixel = 0;
       }
     }
   }
@@ -87,6 +90,7 @@ auto main() -> int {
   const auto window =
       // glfwCreateWindow(500, 500, "Bad Apple Graphark", nullptr, nullptr);
       glfwCreateWindow(480, 480, "Bad Apple Graphark", nullptr, nullptr);
+      // glfwCreateWindow(960, 960, "Bad Apple Graphark", nullptr, nullptr);
   if (window == nullptr) {
     std::cerr << "Failed to create GLFW window." << std::endl;
     glfwTerminate();
@@ -124,13 +128,6 @@ auto main() -> int {
     return 1;
   }
 
-  std::vector<float> vertices;
-  vertices.reserve(480 * 480);
-  for (const auto& [x, y] : read_coordinates()) {
-    vertices.emplace_back(x);
-    vertices.emplace_back(y);
-  }
-
   glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_TRUE);
 
   // auto cam = Camera(-10, 10, -10, 10);
@@ -165,18 +162,33 @@ auto main() -> int {
     }
   };
 
+  std::vector<std::vector<float>> frames;
+  for (const auto& frame : read_frames()) {
+    frames.emplace_back(frame);
+  }
+  size_t frame_index = 0;
   glClearColor(0.0, 0.0, 0.0, 0.0);
+  auto time_frame_accumulator = 0.0;
   while (!glfwWindowShouldClose(window)) {
     const auto delta = get_delta();
+    time_frame_accumulator += delta;
     const auto m_projection =
         // glm::ortho(0.0F, 480.0F, 0.0F, 360.0F, 1.0F, 0.0F);
-    glm::ortho(cam.minX(), cam.maxX(), cam.minY(), cam.maxY(), -1.0f, 1.0f);
+        glm::ortho(cam.minX(), cam.maxX(), cam.minY(), cam.maxY(), -1.0f, 1.0f);
     const auto grid = graphark::elements::get_grid_drawable(cam);
     const graphark::Drawable2D axis =
         graphark::elements::get_axis_drawable(cam);
 
-    const graphark::Drawable2D bad_apple_frame =
-        graphark::Drawable2D(vertices, GL_POINTS);
+    if (time_frame_accumulator >= (1.0 / 30.0)) {
+      time_frame_accumulator -= (1.0 / 30.0);
+      frame_index++;
+      if (frame_index == frames.size()) {
+        frame_index = 0;
+      }
+    }
+    const auto& frame_vertices = frames[frame_index];
+    const auto bad_apple_frame =
+        graphark::Drawable2D(frame_vertices, GL_POINTS);
 
     handle_input(delta);
 
