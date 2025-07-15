@@ -153,7 +153,7 @@ int main() {
     return 1;
   }
 
-  std::ofstream serialized_file("serialized_bad_apple.bin");
+  std::ofstream serialized_file("serialized_bad_apple.bin", std::ios::binary);
   if (!serialized_file.is_open()) {
     std::cerr << "Could not open output file" << std::endl;
     return 1;
@@ -189,46 +189,34 @@ int main() {
     cv::Mat binary_frame;
     cv::threshold(grayscale_frame, binary_frame, 128, 1, cv::THRESH_BINARY_INV);
 
-    std::vector<bool> binaryData;
-    binaryData.reserve(binary_frame.total());
-
-    cv::MatConstIterator_<uchar> it = binary_frame.begin<uchar>(),
-                                 end = binary_frame.end<uchar>();
-    for (; it != end; ++it) {
-      binaryData.push_back(*it != 0);
-    }
-
     const auto bytes_generator =
-        [&binaryData, &bad_apple_ascii_file,
-         &grayscale_frame]() -> std::generator<uint8_t> {
+        [&binary_frame, &bad_apple_ascii_file]() -> std::generator<uint8_t> {
       uint8_t current_byte = 0;
       uint8_t bit_count = 0;
-      int width_pixel_count = 0;
-      for (auto is_pixel_black : binaryData) {
-        if (is_pixel_black) {
-          current_byte |= 0b1 << (7 - bit_count);
-          bad_apple_ascii_file << "@";
-        } else {
-          bad_apple_ascii_file << "-";
-        }
 
-        width_pixel_count++;
-        if (width_pixel_count == grayscale_frame.cols) {
-          bad_apple_ascii_file << "\n";
-          width_pixel_count = 0;
-        }
+      for (int row = 0; row < binary_frame.rows; ++row) {
+        for (int col = 0; col < binary_frame.cols; ++col) {
+          const bool is_pixel_black = binary_frame.at<uint8_t>(row, col);
 
-        bit_count++;
-        if (bit_count == 8) {
-          co_yield current_byte;
-          current_byte = 0;
-          bit_count = 0;
+          if (is_pixel_black) {
+            current_byte |= (1 << (7 - bit_count));
+            bad_apple_ascii_file << "@";
+          } else {
+            bad_apple_ascii_file << "-";
+          }
+
+          bit_count++;
+          if (bit_count == 8) {
+            co_yield current_byte;
+            current_byte = 0;
+            bit_count = 0;
+          }
         }
+        bad_apple_ascii_file << "\n";  // newline after each row
       }
-      if (bit_count != 0) {
+
+      if (bit_count > 0) {
         co_yield current_byte;
-        current_byte = 0;
-        bit_count = 0;
       }
     };
 
