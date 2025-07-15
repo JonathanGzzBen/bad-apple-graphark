@@ -6,12 +6,28 @@
 #include <generator>
 #include <iostream>
 
+#if defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__) || \
+    defined(__CYGWIN32__)
+#include <Mmsystem.h>
+#include <mciapi.h>
+#pragma comment(lib, "Winmm.lib")
+#endif
+
 void APIENTRY glDebugCallback(GLenum source, GLenum type, GLuint error_id,
                               GLenum severity, GLsizei length,
                               const GLchar* message, const void* userParam) {
   if (severity != GL_DEBUG_SEVERITY_NOTIFICATION) {
     std::cerr << "OpenGL debug: " << message << "\n";
   }
+}
+
+void start_music_playback() {
+#if defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__) || \
+    defined(__CYGWIN32__)
+  mciSendString("open \"bad_apple.mp3\" type mpegvideo alias mp3", NULL, 0,
+                NULL);
+  mciSendString("play mp3 repeat", NULL, 0, NULL);
+#endif
 }
 
 void glfwErrorCallback(const int error, const char* description) {
@@ -166,6 +182,8 @@ auto main() -> int {
   for (const auto& frame : read_frames()) {
     frames.emplace_back(frame);
   }
+
+  start_music_playback();
   size_t frame_index = 0;
   glClearColor(0.0, 0.0, 0.0, 0.0);
   auto time_frame_accumulator = 0.0;
