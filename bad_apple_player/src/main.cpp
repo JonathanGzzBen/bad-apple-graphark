@@ -43,29 +43,29 @@ auto read_frames() -> std::generator<std::vector<float>> {
   uint32_t frame_count =
       read_uint32(coordinates_file);  // Unused but required for alignment
 
-  uint32_t current_width_pixel = 0;
-  uint32_t current_height_pixel = 0;
   uint8_t byte;
-
   std::vector<float> coords;
+  coords.reserve(width * height * 2);
+  uint32_t bits_count = 0;
   while (coordinates_file.read(reinterpret_cast<char*>(&byte), 1)) {
     for (int current_bit = 0; current_bit < 8; current_bit++) {
+      uint32_t x = bits_count % width;
+      uint32_t y = bits_count / width;
+      bits_count++;
+
       const bool is_black = byte >> (7 - current_bit) & 0b1;
       if (is_black) {
-        coords.emplace_back(current_width_pixel);
+        assert(x < width);
+        assert(y < height);
+        coords.emplace_back(x);
         // Flip y
-        coords.emplace_back(height - current_height_pixel);
+        coords.emplace_back(height - y);
       }
-      current_width_pixel++;
-      if (width <= current_width_pixel) {
-        current_width_pixel = 0;
-        current_height_pixel++;
-      }
-      if (current_height_pixel == height) {
-        // Complete frame
+
+      if (bits_count == (width * height)) {
         co_yield coords;
         coords.clear();
-        current_height_pixel = 0;
+        bits_count = 0;
       }
     }
   }
@@ -90,7 +90,7 @@ auto main() -> int {
   const auto window =
       // glfwCreateWindow(500, 500, "Bad Apple Graphark", nullptr, nullptr);
       glfwCreateWindow(480, 480, "Bad Apple Graphark", nullptr, nullptr);
-      // glfwCreateWindow(960, 960, "Bad Apple Graphark", nullptr, nullptr);
+  // glfwCreateWindow(960, 960, "Bad Apple Graphark", nullptr, nullptr);
   if (window == nullptr) {
     std::cerr << "Failed to create GLFW window." << std::endl;
     glfwTerminate();
