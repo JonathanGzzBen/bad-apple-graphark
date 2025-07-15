@@ -105,13 +105,14 @@ auto main() -> int {
 
   const auto window =
       // glfwCreateWindow(500, 500, "Bad Apple Graphark", nullptr, nullptr);
-      glfwCreateWindow(480, 480, "Bad Apple Graphark", nullptr, nullptr);
-  // glfwCreateWindow(960, 960, "Bad Apple Graphark", nullptr, nullptr);
+      // glfwCreateWindow(480, 480, "Bad Apple Graphark", nullptr, nullptr);
+  glfwCreateWindow(960, 960, "Bad Apple Graphark", nullptr, nullptr);
   if (window == nullptr) {
     std::cerr << "Failed to create GLFW window." << std::endl;
     glfwTerminate();
     return 1;
   }
+  glfwSetWindowSize(window, 960, 720);
 
   glfwMakeContextCurrent(window);
 
